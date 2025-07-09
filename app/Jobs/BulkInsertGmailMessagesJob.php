@@ -29,6 +29,7 @@ class BulkInsertGmailMessagesJob implements ShouldQueue
     public function __construct($messageIds, $gmailAccountId)
     {
         //
+
         $this->token = GmailAccounts::where('uuid', $gmailAccountId)->value('access_token');
         $this->messageIds = $messageIds;
         $this->gmailAccountId = $gmailAccountId;
@@ -52,6 +53,17 @@ class BulkInsertGmailMessagesJob implements ShouldQueue
     public function handle(): void
     {
         //
+        $googleClient = $this->fetchGoogleClient($this->googleClientAuthConfig);
+        $googleClient->setAccessToken($this->token);
+        if ($googleClient->isAccessTokenExpired()) {
+            $refreshToken = GmailAccounts::where('uuid', $this->gmailAccountId)->value('refresh_token');
+            $newAccessToken = $googleClient->fetchAccessTokenWithRefreshToken($refreshToken);
+            $updateToken = GmailAccounts::where('uuid', $this->gmailAccountId)->update([
+                'access_token' => $newAccessToken['access_token'],
+                'refresh_token' => $newAccessToken['refresh_token']
+            ]);
+            $this->token = $newAccessToken['access_token'];
+        }
         $client = $this->authTokenGoogleClient($this->token, $this->googleClientAuthConfig);
         $client->setUseBatch(true);
 
